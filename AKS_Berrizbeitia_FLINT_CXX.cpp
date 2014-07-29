@@ -12,6 +12,7 @@
 #include<flint/fmpz_mod_poly.h>
 #include<flint/arith.h>
 #include<math.h>
+#include<iostream>
 using namespace std;
 struct cmp{
     bool operator ()(fmpz a,fmpz b){
@@ -57,6 +58,7 @@ bool CASE_I(fmpz_t n){
     mpfr_mul_ui(n_mpfr,n_mpfr,2,MPFR_RNDD);
     const ulong s=mpfr_get_ui(n_mpfr,MPFR_RNDU);//s=ceil(2log(log(n)))
     mpfr_clear(n_mpfr);
+    //cout<<"s="<<s<<endl<<"k="<<k<<endl;
     /******************************Step 1*******************************/
     fmpz_fdiv_q_ui(A,A,2);//A=(n-1)/2
     fmpz_powm(A,a,A,n);//A=a^((n-1)/2) mod n
@@ -71,14 +73,126 @@ bool CASE_I(fmpz_t n){
     }
     /******************************Step 3*******************************/
     fmpz_t temp;    fmpz_init_set_ui(temp,1);
-    fmpz_t temp2;   fmpz_init(temp2);
     fmpz_t m;       fmpz_init_set_ui(m,1);
-    ulong card_max;
+    ulong card_max,card1=0,card2=0,i;
     if(s<k)
         card_max=0;
     else
         card_max=s-k;
     card_max=pow(2,card_max);
+    fmpz_t* Set1=NULL;fmpz_t* Set2=NULL;//Generate set1 and set2
+    Set1=(fmpz_t*)flint_calloc(card_max,sizeof(fmpz_t));//|S |=2^max(s-k,0)
+    Set2=(fmpz_t*)flint_calloc(card_max,sizeof(fmpz_t));//|S'|=2^max(s-k,0)
+    fmpz_set(Set1[0],m);fmpz_set(Set2[0],m);
+    card1++;            card2++;
+    bool finded;
+    fmpz_t exp2_k;fmpz_init_set_ui(exp2_k,2);
+    fmpz_pow_ui(exp2_k,exp2_k,k);//exp2_k=2^k
+    while(card1<card_max){
+         while(1){
+            finded=false;
+            fmpz_powm(A,m,exp2_k,n);//A=m^exp2_k mod n
+            for(i=0;i<card2;i++){
+                if(fmpz_equal(A,Set2[i])==1){
+                    fmpz_add_ui(m,m,1);finded=true;break;
+                }
+            }
+            if(finded==false)break;
+        }
+        fmpz_mul_ui(temp,exp2_k,card1);
+        fmpz_add_ui(temp,temp,1);
+        if(fmpz_cmp(m,temp)>0){
+            fmpz_clear(a);
+            fmpz_clear(A);
+            fmpz_clear(temp);
+            fmpz_clear(m);
+            fmpz_clear(exp2_k);
+            flint_free(Set1);flint_free(Set2);
+            return false;
+        }
+        fmpz_gcd(temp,m,n);
+        if(fmpz_cmp_ui(temp,1)>0){
+            fmpz_clear(a);
+            fmpz_clear(A);
+            fmpz_clear(temp);
+            fmpz_clear(m);
+            fmpz_clear(exp2_k);
+            flint_free(Set1);flint_free(Set2);
+            return false;
+        }
+        for(i=0;i<card2;i++){
+            fmpz_sub(temp,A,Set2[i]);
+            fmpz_gcd(temp,temp,n);
+            if(fmpz_cmp_ui(temp,1)>0){
+                fmpz_clear(a);
+                fmpz_clear(A);
+                fmpz_clear(temp);
+                fmpz_clear(m);
+                fmpz_clear(exp2_k);
+                flint_free(Set1);flint_free(Set2);
+                return false;
+            }
+        }
+        for(i=0;i<card1;i++){
+            if(fmpz_equal(Set1[i],m)==1){
+                goto ext1;
+            }
+        }
+        fmpz_set(Set1[card1],m);card1++;
+        ext1:;
+        for(i=0;i<card2;i++){
+            if(fmpz_equal(Set2[i],A)==1){
+                goto ext2;
+            }
+        }
+        fmpz_set(Set2[card2],A);card2++;
+        ext2:;
+    }
+    flint_free(Set2);
+    fmpz_clear(exp2_k);
+    //******************************Step 4*******************************
+    fmpz_fdiv_q_2exp(temp,n,s);//temp=[n/2^s]
+    fmpz_powm(A,a,temp,n);//A=a^[n/2^s] mod n
+    fmpz_fdiv_r_2exp(temp,n,s);//temp=n%2^s
+    temp_ui=fmpz_get_ui(temp);//temp_ui=n%2^s
+    ulong exp2_s=exp2(s);//s=2^s
+    fmpz_mul_si(a,a,-1);
+    fmpz_mod_poly_t modulo;fmpz_mod_poly_init(modulo,n);
+    fmpz_mod_poly_set_coeff_fmpz(modulo,0,a);
+    fmpz_mod_poly_set_coeff_ui  (modulo,exp2_s,1);//modulo=x^2^s-a
+    fmpz_mod_poly_t poly1;fmpz_mod_poly_init(poly1,n);
+    fmpz_mod_poly_set_coeff_ui(poly1,0,1);
+    fmpz_mod_poly_t poly2;fmpz_mod_poly_init(poly2,n);
+    fmpz_mod_poly_set_coeff_ui(poly2,0,1);
+    fmpz_mod_poly_t polytmp;fmpz_mod_poly_init(polytmp,n);
+    for(i=0;i<card1;i++){
+            cout<<i<<endl;
+        fmpz_mod_poly_set_coeff_fmpz(poly1,1,Set1[i]);//poly1=1+m*x
+        fmpz_mod_poly_powmod_fmpz_binexp(polytmp,poly1,n,modulo);//e=poly1^n MOD modulo
+        fmpz_mul(temp,Set1[i],A);//temp=m*a^[n/2^s] mod n
+        fmpz_mod_poly_set_coeff_fmpz(poly2,temp_ui,temp);//poly2=1+m*a^[n/2^s]*x^(n%2^s)
+        if(fmpz_mod_poly_equal(polytmp,poly2)==0){
+            fmpz_clear(a);
+            fmpz_clear(A);
+            fmpz_clear(temp);
+            fmpz_clear(m);
+            fmpz_mod_poly_clear(poly1);
+            fmpz_mod_poly_clear(poly2);
+            fmpz_mod_poly_clear(polytmp);
+            flint_free(Set1);
+            return false;
+        }
+    }
+    fmpz_clear(a);
+    fmpz_clear(A);
+    fmpz_clear(temp);
+    fmpz_clear(m);
+    fmpz_mod_poly_clear(poly1);
+    fmpz_mod_poly_clear(poly2);
+    fmpz_mod_poly_clear(polytmp);
+    flint_free(Set1);
+    return true;
+    /*
     set<fmpz,cmp> Set1;set<fmpz,cmp>::iterator p1;
     set<fmpz,cmp> Set2;
     Set1.insert(*m);Set2.insert(*m);
@@ -87,8 +201,9 @@ bool CASE_I(fmpz_t n){
     while(Set1.size()<card_max){
         while(1){
             fmpz_powm(A,m,exp2_k,n);
-            if(Set2.find(*A)!=Set2.end())
+            if(Set2.find(*A)!=Set2.end()){
                 fmpz_add_ui(m,m,1);
+            }
             else
                 break;
         }
@@ -101,28 +216,35 @@ bool CASE_I(fmpz_t n){
             fmpz_clear(temp2);
             fmpz_clear(m);
             fmpz_clear(exp2_k);
+        //    cout<<"ERR_1"<<endl;
             return false;
         }
         fmpz_gcd(temp,m,n);
-        if(fmpz_cmp_ui(temp,1)>1){
+        if(fmpz_cmp_ui(temp,1)>0){
             fmpz_clear(a);
             fmpz_clear(A);
             fmpz_clear(temp);
             fmpz_clear(temp2);
             fmpz_clear(m);
             fmpz_clear(exp2_k);
+            cout<<"ERR_2"<<endl;
             return false;
         }
-        fmpz_sub(temp,A,n);
-        for(p1=Set2.begin();p1!=Set2.end();p1++){
-            fmpz_gcd(temp2,temp,&(*p1));
-            if(fmpz_cmp_ui(temp2,1)>1){
+        //fmpz_sub(temp,A,n);
+
+        for(p1=Set2.begin();p1!=Set2.end();++p1){
+            fmpz_set(temp,&(*p1));
+            fmpz_sub(temp,A,temp);
+            fmpz_gcd(temp,temp,n);
+            //fmpz_gcd(temp2,temp,&(*p1));
+            if(fmpz_cmp_ui(temp,1)>0){
                 fmpz_clear(a);
                 fmpz_clear(A);
                 fmpz_clear(temp);
                 fmpz_clear(temp2);
                 fmpz_clear(m);
                 fmpz_clear(exp2_k);
+                cout<<"ERR_3"<<endl;
                 return false;
             }
         }
@@ -131,7 +253,7 @@ bool CASE_I(fmpz_t n){
     }
     fmpz_clear(temp2);
     fmpz_clear(exp2_k);
-    /******************************Step 4*******************************/
+    //******************************Step 4*******************************
     fmpz_fdiv_q_2exp(temp,n,s);//temp=[n/2^s]
     fmpz_powm(A,a,temp,n);//A=a^[n/2^s] mod n
     fmpz_fdiv_r_2exp(temp,n,s);//temp=n%2^s
@@ -169,10 +291,10 @@ bool CASE_I(fmpz_t n){
     fmpz_mod_poly_clear(poly1);
     fmpz_mod_poly_clear(poly2);
     fmpz_mod_poly_clear(polytmp);
-    return true;
+    return true;*/
 }
 bool CASE_II(fmpz_t n){///The code here is not finished!!!
-    return false;
+    return true;
 }
 bool AKS_Berrizbeitia(fmpz_t n){
     if(fmpz_cmp_ui(n,101)<0)//Check the small numbers
@@ -199,11 +321,13 @@ bool AKS_Berrizbeitia(fmpz_t n){
     fmpz_clear(small_p_mul);
     return CASE_II(n);//The case of n=4k+3
 }
-#include<iostream>
+
 int main(){
     fmpz_t test;fmpz_init(test);
-    while(fmpz_read(test)){
-        cout<<AKS_Berrizbeitia(test)<<endl;
-    }
+    fmpz_set_ui(test,2);
+    fmpz_pow_ui(test,test,100);
+    fmpz_sub_ui(test,test,479);
+    cout<<AKS_Berrizbeitia(test)<<endl;
+
     return 0;
 }
