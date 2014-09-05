@@ -296,6 +296,7 @@ bool CASE_II(fmpz_t n){
     fmpz_mod_poly_powmod_fmpz_binexp(poly2_core,poly2_core,A,modulo);
     fmpz_fdiv_r_2exp(A,n,t+1);temp_ui=fmpz_get_ui(A);
     fmpz_mod_poly_shift_left(poly2_core,poly2_core,temp_ui);
+	fmpz_mod_poly_powmod_ui_binexp(poly2_core,poly2_core,1,modulo);
     /** Set polytmp **/
     fmpz_mod_poly_init(polytmp,n);
     /** Set poly_one **/
@@ -307,7 +308,7 @@ bool CASE_II(fmpz_t n){
         fmpz_mod_poly_powmod_fmpz_binexp(polytmp,poly1,n,modulo);
         fmpz_mod_poly_scalar_mul_fmpz(poly2,poly2_core,m);
         fmpz_mod_poly_add(poly2,poly2,poly_one);
-        if(fmpz_mod_poly_equal(polytmp,poly2)){
+        if(fmpz_mod_poly_equal(polytmp,poly2)==0){
             fmpz_clear(a);
             fmpz_clear(A);
             fmpz_clear(m);
